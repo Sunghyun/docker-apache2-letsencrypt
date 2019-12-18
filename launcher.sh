@@ -1,17 +1,28 @@
 #!/bin/bash
-
-echo "Checking certificates ( if /etc/letsencrypt/live/$(hostname -f)/privkey.pem exist )."
-if [[ ! -e /etc/letsencrypt/live/$(hostname -f)/privkey.pem ]]
-then
+echo "----------------------------------------------------------------"
+echo " Running $0 to check for letsencrypt certificate and renewal"
+echo "--------------------------------------------------------------- -"
+privateKeyHome="/etc/letsencrypt/live/$(hostname -f)"
+privateKeyFile="$privateKeyHome/privkey.pem"
+renewalFlags=""
+if [ ! -z $LETS_ENCRYPT_FORCE_RENEWAL ]; then
+  renewalFlags="$renawalFlags --force-renewal"
+fi
+echo "Checking if certificate [$privateKeyFile] exist )."
+if [ ! -f $privateKeyFile ]; then
+  echo "Certificate file [$privateKeyFile] does not exist"
   if [[ ! "x$LETS_ENCRYPT_DOMAINS" == "x" ]]; then
     DOMAIN_CMD="-d $(echo $LETS_ENCRYPT_DOMAINS | sed 's/,/ -d /')"
+    certbot -n certonly --no-self-upgrade --agree-tos --standalone -m "$LETS_ENCRYPT_EMAIL" -d $(hostname -f) $DOMAIN_CMD
+    ln -s /etc/letsencrypt/live/$(hostname -f) /etc/letsencrypt/certs
+  else
+    echo "LETS_ENCRYPT_DOMAINS not defined, skipping certificate creation"
   fi
-
-  certbot -n certonly --no-self-upgrade --agree-tos --apache -m "$LETS_ENCRYPT_EMAIL" -d $(hostname -f) $DOMAIN_CMD
-  ln -s /etc/letsencrypt/live/$(hostname -f) /etc/letsencrypt/certs
 else
-  certbot renew --no-random-sleep-on-renew --no-self-upgrade
+  echo "Certificate file [$privateKeyFile] exist, checking for renewal"
+  cmd="certbot renew --no-random-sleep-on-renew --apache --no-self-upgrade $renewalFlags"
+  echo "Running cms: [$cmd]"
+  eval $cmd
 fi
-
 echo "Launching apache2."
 apache2 -DFOREGROUND
